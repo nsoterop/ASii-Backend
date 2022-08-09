@@ -216,11 +216,19 @@ router.post('/order', async (req, res) => {
         }
     ]
 
+    let serviceCharges = [{
+        amountMoney: {
+            amount: costDetails.serviceFee,
+            currency: 'USD'
+        }
+    }]
+
     try {
         const response = await client.ordersApi.createOrder({
           order: {
             locationId: env.LOCATION_ID,
             lineItems: items,
+            serviceCharges: serviceCharges,
             taxes: taxes
           },
           idempotencyKey: uuidv4()
@@ -268,7 +276,6 @@ router.post('/createPayment', async (req, res) => {
                 payment.verificationToken = payload.verificationToken;
             }
 
-            console.log(payment)
             const { result } = await client.paymentsApi.createPayment(
                 payment
             );
