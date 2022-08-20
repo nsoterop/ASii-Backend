@@ -7,7 +7,7 @@ const productsRoutes = require('./routes/products')
 
 const app = express();
 
-mongoose.connect(env.db_connection_string)
+mongoose.connect(env.db_connection_string, {useNewURLParser: true})
     .then(() => {
         console.log('Connected to database.')
     })
