@@ -55,6 +55,28 @@ router.get("/filterCategory/:pageNumber/:itemsPerPage/:category", (req, res, nex
     }
 })
 
+router.post("/filterCategory/:pageNumber/:itemsPerPage", (req, res, next) => {
+    var query = req.body.category
+    try {
+        Product.find({
+            $and : [ 
+                { $or : [ 
+                    {"CategoryPathID" : {$regex: query.toUpperCase()} }
+                ]},
+                { "UnitPrice" : {$not: /0.00/} }
+            ]
+        })
+        .sort('ItemID')
+        .skip(req.params.itemsPerPage * (req.params.pageNumber - 1))
+        .limit(req.params.itemsPerPage)
+        .then((documents) => {
+            res.status(200).json(documents)
+        });
+    } catch (e) {
+        console.log(e)
+    }
+})
+
 //search
 router.get("/search/:pageNumber/:itemsPerPage/:query", async (req, res, next) => {
     var query = sanitize(req.params.query);
@@ -246,66 +268,28 @@ router.post('/order', async (req, res) => {
 router.post('/createPayment', async (req, res) => {
     const payload = req.body
 
-    // if (!validatePaymentPayload(payload)) {
-    //     throw createError(400, 'Bad Request');
-    // }
 
-        try {
-            const idempotencyKey = uuidv4()
-            const payment = {
-                idempotencyKey: idempotencyKey,
-                locationId: env.LOCATION_ID,
-                sourceId: payload.sourceId,
-                amountMoney: payload.amountMoney,
-                orderId: payload.orderId,
-                buyerEmailAddress: payload.buyerEmailAddress,
-                shippingAddress: {
-                    addressLine1: payload.shippingAddress.addressLine1,
-                    locality: payload.shippingAddress.locality,
-                    administrativeDistrictLevel1: payload.shippingAddress.administrativeDistrictLevel1,
-                    country: payload.shippingAddress.country,
-                    postalCode: payload.shippingAddress.postalCode
-                }
-            };
-
-            if (payload.customerId) {
-                payment.customerId = payload.customerId;
-            }
-
-            if (payload.verificationToken) {
-                payment.verificationToken = payload.verificationToken;
-            }
-
-            const { result } = await client.paymentsApi.createPayment(
-                payment
-            );
-
-            res.status(200).json({
-                success: true,
-                payment: {
-                    id: result.payment.id,
-                    status: result.payment.status,
-                    receiptUrl: result.payment.receiptUrl,
-                    orderId: result.payment.orderId,
-                },
-            });
-
-            sendEmail(payload)
-        } catch (err) {
-           throw err
-        }
-})
-
-function sendEmail(payload) {
     let emailBody = {
-        amountMoney: payload.amountMoney,
+        costDetails: payload.costDetails,
         companyName: payload.companyName,
         shippingAccountNumber: payload.shippingAccountNumber,
-        orderId: payload.orderId,
         buyerEmailAddress: payload.buyerEmailAddress,
         shippingAddress: payload.shippingAddress,
+        phone: payload.phone,
+        firstname: payload.firstname,
+        lastname: payload.lastname,
+        companyName: payload.companyName,
         cart: payload.cart
-      }
+    }
+    // let emailBody = {
+    //     amountMoney: payload.amountMoney,
+    //     companyName: payload.companyName,
+    //     shippingAccountNumber: payload.shippingAccountNumber,
+    //     orderId: payload.orderId,
+    //     buyerEmailAddress: payload.buyerEmailAddress,
+    //     shippingAddress: payload.shippingAddress,
+    //     cart: payload.cart
+    // }
   
       const transporter = nodemailer.createTransport({
           service: 'outlook',
@@ -314,26 +298,41 @@ function sendEmail(payload) {
             user: 'ordersatasii@outlook.com',
             pass: '92Money01'
           },
+        // auth: {
+        //     user: 'asiimedicalorderconfirmation@outlook.com',
+        //     pass: 'asii@admin'
+        //   },
           tls: {
             rejectUnauthorized: false
           }
       });
 
       let orderedItems = ""
-      let tempCart = JSON.parse(emailBody.cart)
-      tempCart.items.forEach(item => {
-        orderedItems += "<br><b>NDC Item Code:</b>" + item.NDCItemCode + " (<b>Quantity: </b>" + item.quantity + ")"
+      let tempCart = emailBody.cart
+      tempCart.forEach(item => {
+        orderedItems += "<br><b>NDC Item Code: </b>" + item.NDCItemCode + " (<b>Quantity: </b>" + item.quantity + ")"
       })
       
       var mailOptions = {
-          from: 'ordersatasii@outlook.com',
-          to: 'ordersatasii@outlook.com',
-          subject: 'Order Confirmation',
-          html: "<b>Total: $</b>" + (emailBody.amountMoney.amount).toFixed(2) / 100 + 
+        from: 'ordersatasii@outlook.com',
+        to: 'ordersatasii@outlook.com',
+        //   from: 'asiimedicalorderconfirmation@outlook.com',
+        //   to: 'asiimedicalorderconfirmation@outlook.com',
+          subject: 'Order Submitted',
+          html: //"<b>Total: $</b>" + (emailBody.amountMoney.amount).toFixed(2) / 100 + 
+                "<br><br><h2>Contact Information</h2>" +
+                "<br><b>Name: </b>" + emailBody.firstname + " " + emailBody.lastname +
                 "<br><b>Company Name: </b>" + emailBody.companyName +
-                "<br><b>Shipping Account Number: </b>" + emailBody.shippingAccountNumber + 
-                "<br><b>Order ID: </b>" + emailBody.orderId +
+                //"<br><b>Order ID: </b>" + emailBody.orderId +
                 "<br><b>Buyer Email Address: </b>" + emailBody.buyerEmailAddress +
+                "<br><b>Buyer Phone Number: </b>" + emailBody.phone +
+                "<br><br><h2>Cost Details</h2>" +
+                "<br><b>Cart Total: </b>$" + emailBody.costDetails.cartTotal.toFixed(2) +
+                "<br><b>Sales Tax: </b>%" + emailBody.costDetails.salesTax +
+                "<br><b>Service Fee: </b>$" + emailBody.costDetails.serviceFee.toFixed(2) +
+                "<br><b>Order Total: </b>$" + emailBody.costDetails.orderTotal.toFixed(2) +
+                "<br><br><h2>Shipping Information</h2>" +
+                "<br><b>Shipping Account Number: </b>" + emailBody.shippingAccountNumber + 
                 "<br><b>Address: </b>" + emailBody.shippingAddress.addressLine1 +
                 "<br><b>City: </b>" + emailBody.shippingAddress.locality +
                 "<br><b>State: </b>" + emailBody.shippingAddress.administrativeDistrictLevel1 +
@@ -341,19 +340,161 @@ function sendEmail(payload) {
                 "<br><b>Postal: </b>" + emailBody.shippingAddress.postalCode +
                 "<br><br><u>Items Ordered:</u>" + orderedItems
 
-      };
+    };
   
-      try {
-          transporter.sendMail(mailOptions, function(error, info){
-              if (error) {
-                console.log("HERE", error);
-              } else {
-                console.log('Email sent: ' + info.response);
-              }
-          });
-      } catch (err) {
-          console.log(err)
-      }
-}
+    try {
+        transporter.sendMail(mailOptions, function(error, info){
+            if (error) {
+              console.log("HERE", error);
+              res.status(500).json()
+            } else {
+              console.log('Email sent: ' + info.response);
+              res.status(200).json()
+            }
+        });
+    } catch (err) {
+        console.log(err)
+        res.status(500).json()
+    }
+    // // if (!validatePaymentPayload(payload)) {
+    // //     throw createError(400, 'Bad Request');
+    // // }
+
+    //     try {
+    //         const idempotencyKey = uuidv4()
+    //         const payment = {
+    //             idempotencyKey: idempotencyKey,
+    //             locationId: env.LOCATION_ID,
+    //             sourceId: payload.sourceId,
+    //             amountMoney: payload.amountMoney,
+    //             orderId: payload.orderId,
+    //             buyerEmailAddress: payload.buyerEmailAddress,
+    //             shippingAddress: {
+    //                 addressLine1: payload.shippingAddress.addressLine1,
+    //                 locality: payload.shippingAddress.locality,
+    //                 administrativeDistrictLevel1: payload.shippingAddress.administrativeDistrictLevel1,
+    //                 country: payload.shippingAddress.country,
+    //                 postalCode: payload.shippingAddress.postalCode
+    //             }
+    //         };
+
+    //         if (payload.customerId) {
+    //             payment.customerId = payload.customerId;
+    //         }
+
+    //         if (payload.verificationToken) {
+    //             payment.verificationToken = payload.verificationToken;
+    //         }
+
+    //         const { result } = await client.paymentsApi.createPayment(
+    //             payment
+    //         );
+
+    //         res.status(200).json({
+    //             success: true,
+    //             payment: {
+    //                 id: result.payment.id,
+    //                 status: result.payment.status,
+    //                 receiptUrl: result.payment.receiptUrl,
+    //                 orderId: result.payment.orderId,
+    //             },
+    //         });
+
+    //         //sendEmail(payload)
+    //     } catch (err) {
+    //        throw err
+    //     }
+})
+
+// function sendEmail(payload) {
+//     console.log(payload)
+//     let emailBody = {
+//         costDetails: payload.costDetails,
+//         companyName: payload.companyName,
+//         shippingAccountNumber: payload.shippingAccountNumber,
+//         buyerEmailAddress: payload.buyerEmailAddress,
+//         shippingAddress: payload.shippingAddress,
+//         phone: payload.phone,
+//         firstname: payload.firstname,
+//         lastname: payload.lastname,
+//         companyName: payload.companyName,
+//         cart: payload.cart
+//     }
+//     // let emailBody = {
+//     //     amountMoney: payload.amountMoney,
+//     //     companyName: payload.companyName,
+//     //     shippingAccountNumber: payload.shippingAccountNumber,
+//     //     orderId: payload.orderId,
+//     //     buyerEmailAddress: payload.buyerEmailAddress,
+//     //     shippingAddress: payload.shippingAddress,
+//     //     cart: payload.cart
+//     // }
+  
+//       const transporter = nodemailer.createTransport({
+//           service: 'outlook',
+//           secure : false,
+//         //   auth: {
+//         //     user: 'ordersatasii@outlook.com',
+//         //     pass: '92Money01'
+//         //   },
+//         auth: {
+//             user: 'asiimedicalorderconfirmation@outlook.com',
+//             pass: 'asii@admin'
+//           },
+//           tls: {
+//             rejectUnauthorized: false
+//           }
+//       });
+
+//       let orderedItems = ""
+//       let tempCart = emailBody.cart
+//       tempCart.forEach(item => {
+//         orderedItems += "<br><b>NDC Item Code: </b>" + item.NDCItemCode + " (<b>Quantity: </b>" + item.quantity + ")"
+//       })
+      
+//       var mailOptions = {
+//         //   from: 'ordersatasii@outlook.com',
+//         //   to: 'ordersatasii@outlook.com',
+//           from: 'asiimedicalorderconfirmation@outlook.com',
+//           to: 'asiimedicalorderconfirmation@outlook.com',
+//           subject: 'Order Submitted',
+//           html: //"<b>Total: $</b>" + (emailBody.amountMoney.amount).toFixed(2) / 100 + 
+//                 "<br><br><h2>Contact Information</h2>" +
+//                 "<br><b>Name: </b>" + emailBody.firstname + " " + emailBody.lastname +
+//                 "<br><b>Company Name: </b>" + emailBody.companyName +
+//                 //"<br><b>Order ID: </b>" + emailBody.orderId +
+//                 "<br><b>Buyer Email Address: </b>" + emailBody.buyerEmailAddress +
+//                 "<br><b>Buyer Phone Number: </b>" + emailBody.phone +
+//                 "<br><br><h2>Cost Details</h2>" +
+//                 "<br><b>Cart Total: </b>$" + emailBody.costDetails.cartTotal.toFixed(2) +
+//                 "<br><b>Sales Tax: </b>%" + emailBody.costDetails.salesTax +
+//                 "<br><b>Service Fee: </b>$" + emailBody.costDetails.serviceFee.toFixed(2) +
+//                 "<br><b>Order Total: </b>$" + emailBody.costDetails.orderTotal.toFixed(2) +
+//                 "<br><br><h2>Shipping Information</h2>" +
+//                 "<br><b>Shipping Account Number: </b>" + emailBody.shippingAccountNumber + 
+//                 "<br><b>Address: </b>" + emailBody.shippingAddress.addressLine1 +
+//                 "<br><b>City: </b>" + emailBody.shippingAddress.locality +
+//                 "<br><b>State: </b>" + emailBody.shippingAddress.administrativeDistrictLevel1 +
+//                 "<br><b>Country: </b>" + emailBody.shippingAddress.country +
+//                 "<br><b>Postal: </b>" + emailBody.shippingAddress.postalCode +
+//                 "<br><br><u>Items Ordered:</u>" + orderedItems
+
+//     };
+  
+//     try {
+//         transporter.sendMail(mailOptions, function(error, info){
+//             if (error) {
+//               console.log("HERE", error);
+//               return false
+//             } else {
+//               console.log('Email sent: ' + info.response);
+//               return true
+//             }
+//         });
+//     } catch (err) {
+//         console.log(err)
+//         return false
+//     }
+// }
 
 module.exports = router;
