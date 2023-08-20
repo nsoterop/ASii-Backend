@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const env = require('../environment.js')
 
 const productsRoutes = require('./routes/products')
+const smallQuantityProductsRoutes = require('./routes/smallQuantityProducts')
 
 const app = express();
 
@@ -28,5 +29,7 @@ app.use((req, res, next) => {
 })
 
 app.use("/api/products", productsRoutes)
+app.use("/api/smallQuantityProducts", smallQuantityProductsRoutes)
+
 
 module.exports = app;
