@@ -294,14 +294,14 @@ router.post('/createPayment', async (req, res) => {
       const transporter = nodemailer.createTransport({
           service: 'outlook',
           secure : false,
-        //   auth: {
-        //     user: 'ordersatasii@outlook.com',
-        //     pass: '92Money01'
-        //   },
-        auth: {
-            user: 'asiimedicalorderconfirmation@outlook.com',
-            pass: 'asii@admin'
+          auth: {
+            user: 'ordersatasii@outlook.com',
+            pass: '92Money01'
           },
+        // auth: {
+        //     user: 'asiimedicalorderconfirmation@outlook.com',
+        //     pass: 'asii@admin'
+        //   },
           tls: {
             rejectUnauthorized: false
           }
@@ -310,14 +310,18 @@ router.post('/createPayment', async (req, res) => {
       let orderedItems = ""
       let tempCart = emailBody.cart
       tempCart.forEach(item => {
-        orderedItems += "<br><b>NDC Item Code: </b>" + item.NDCItemCode + " (<b>Quantity: </b>" + item.quantity + ")"
+        if (item.NDCItemCode) {
+            orderedItems += "<br><b>NDC Item Code: </b>" + item.NDCItemCode + " (<b>Quantity: </b>" + item.quantity + ")"
+        } else {
+            orderedItems += "<br><b>Item Code: </b>" + item.ItemID + " (<b>Quantity: </b>" + item.quantity + ")"
+        }
       })
       
       var mailOptions = {
-        // from: 'ordersatasii@outlook.com',
-        // to: 'ordersatasii@outlook.com',
-          from: 'asiimedicalorderconfirmation@outlook.com',
-          to: 'asiimedicalorderconfirmation@outlook.com',
+        from: 'ordersatasii@outlook.com',
+        to: 'ordersatasii@outlook.com',
+          //from: 'asiimedicalorderconfirmation@outlook.com',
+          //to: 'asiimedicalorderconfirmation@outlook.com',
           subject: 'Order Submitted',
           html: //"<b>Total: $</b>" + (emailBody.amountMoney.amount).toFixed(2) / 100 + 
                 "<br><br><h2>Contact Information</h2>" +
